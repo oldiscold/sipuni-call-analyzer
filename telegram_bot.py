@@ -136,6 +136,8 @@ async def send_analysis_result(
     caller_number: str,
     called_number: str,
     analysis: str,
+    client_niche: str = "",
+    lead_source: str = "",
 ) -> bool:
     """
     Отправляет результат анализа звонка в Telegram.
@@ -148,13 +150,17 @@ async def send_analysis_result(
     # Форматируем направление
     direction_text = format_direction(direction)
 
+    # Доп. поля (если определены)
+    niche_line = f"\n🏢 Ниша: {client_niche}" if client_niche and client_niche != "Не определена" else ""
+    source_line = f"\n📢 Источник: {lead_source}" if lead_source and lead_source != "Не определён" else ""
+
     # Формируем сообщение
     message = f"""📊 *Анализ звонка*
 👤 Менеджер: {manager_name}
 📅 Дата: {call_date}
 ⏱ Длительность: {duration} сек
 {direction_text}: {caller_number} → {called_number}
-📋 Метод оценки: CQR (Call Quality Rate)
+📋 Метод оценки: CQR (Call Quality Rate){niche_line}{source_line}
 ━━━━━━━━━━━━━━━
 {analysis}"""
 

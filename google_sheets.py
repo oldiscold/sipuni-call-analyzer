@@ -37,13 +37,14 @@ SHEET_HEADERS = [
     "Инициатива",
     "Проблема",
     "Продукт",
-    "Совет",
     "Возражение",
     "Дожим",
     "Выгоды",
     "Следующий шаг",
     "Боли клиента",
     "Рекомендация",
+    "Ниша клиента",
+    "Источник",
 ]
 
 
@@ -132,13 +133,14 @@ def _build_row(call_data: dict) -> list[Any]:
         cqr.get("initiative", ""),
         cqr.get("problem", ""),
         cqr.get("product", ""),
-        cqr.get("advice", ""),
         cqr.get("objection", ""),
         cqr.get("closing", ""),
         cqr.get("benefits", ""),
         cqr.get("next_step", ""),
         call_data.get("client_pains", ""),
         call_data.get("recommendation", ""),
+        call_data.get("client_niche", ""),
+        call_data.get("lead_source", ""),
     ]
 
 
