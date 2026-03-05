@@ -1,12 +1,13 @@
 """
 Sipuni Call Analyzer - Транскрипция и анализ звонков
 
-Транскрибация через Groq Whisper (large-v3), анализ через Groq Llama 3.3 70B (бесплатно).
+Транскрибация через Groq Whisper (large-v3), анализ через OpenAI GPT-4o.
 """
 
 import asyncio
 import logging
 import os
+import re
 from pathlib import Path
 from typing import Optional
 
@@ -15,6 +16,7 @@ from dotenv import load_dotenv
 from groq import Groq
 from openai import AsyncOpenAI
 
+from config import get_manager_name
 from telegram_bot import send_analysis_result, send_error_notification
 
 load_dotenv()
@@ -88,6 +90,92 @@ ANALYSIS_SYSTEM_PROMPT = """Ты — эксперт по контролю кач
 Только этот формат. Без вступлений и пояснений к пунктам."""
 
 
+def parse_cqr_result(analysis_text: str) -> dict:
+    """
+    Парсит текст ответа LLM и извлекает структурированные данные CQR.
+
+    Возвращает dict с ключами:
+    - cqr_scores: dict с баллами по каждому критерию
+    - cqr_total: общий балл (float)
+    - client_pains: текст болей клиента
+    - recommendation: текст рекомендации
+    - raw_text: исходный текст анализа
+    """
+    result = {
+        "cqr_scores": {
+            "greeting": "",
+            "speech": "",
+            "initiative": "",
+            "problem": "",
+            "product": "",
+            "advice": "",
+            "objection": "",
+            "closing": "",
+            "benefits": "",
+            "next_step": "",
+        },
+        "cqr_total": "",
+        "client_pains": "",
+        "recommendation": "",
+        "raw_text": analysis_text,
+    }
+
+    if not analysis_text or analysis_text.startswith("⚠️"):
+        return result
+
+    # Паттерны для извлечения баллов (учитываем эмодзи и вариации текста)
+    score_patterns = [
+        ("greeting",   r"Приветствие:\s*([\d.]+)"),
+        ("speech",     r"Речь:\s*([\d.]+)"),
+        ("initiative", r"Инициатива:\s*([\d.]+)"),
+        ("problem",    r"Проблема:\s*([\d.]+)"),
+        ("product",    r"Продукт:\s*([\d.]+)"),
+        ("advice",     r"Совет:\s*([\d.]+)"),
+        ("objection",  r"Возражение:\s*([\d.]+)"),
+        ("closing",    r"Дожим:\s*([\d.]+)"),
+        ("benefits",   r"Выгоды:\s*([\d.]+)"),
+        ("next_step",  r"Следующий шаг:\s*([\d.]+)"),
+    ]
+
+    for key, pattern in score_patterns:
+        match = re.search(pattern, analysis_text)
+        if match:
+            try:
+                result["cqr_scores"][key] = float(match.group(1))
+            except ValueError:
+                pass
+
+    # Общий балл: "CQR: X/10" или "CQR: X"
+    total_match = re.search(r"CQR:\s*([\d.]+)(?:/10)?", analysis_text)
+    if total_match:
+        try:
+            result["cqr_total"] = float(total_match.group(1))
+        except ValueError:
+            pass
+
+    # Боли клиента: всё между "Боли клиента:" и следующим разделом
+    pains_match = re.search(
+        r"Боли клиента:\s*\n((?:[-•]\s*.+\n?)+)",
+        analysis_text,
+    )
+    if pains_match:
+        pains_raw = pains_match.group(1).strip()
+        # Убираем маркеры списка для компактного хранения
+        pains_lines = [
+            line.lstrip("-•").strip()
+            for line in pains_raw.splitlines()
+            if line.strip()
+        ]
+        result["client_pains"] = "; ".join(pains_lines)
+
+    # Рекомендация
+    rec_match = re.search(r"Рекомендация:\s*(.+?)(?:\n\n|\Z)", analysis_text, re.DOTALL)
+    if rec_match:
+        result["recommendation"] = rec_match.group(1).strip()
+
+    return result
+
+
 async def process_call(
     call_id: str,
     recording_url: str,
@@ -97,6 +185,9 @@ async def process_call(
     direction: str,
     manager_name: str,
     call_start: Optional[str],
+    # Дополнительные поля для Google Sheets
+    manager_short_num: Optional[str] = None,
+    call_start_timestamp: Optional[int] = None,
 ) -> None:
     """
     Основной пайплайн обработки звонка.
@@ -105,7 +196,10 @@ async def process_call(
     2. Транскрибация через Groq Whisper
     3. Анализ через GPT-4o
     4. Отправка результата в Telegram
+    5. Запись в Google Sheets
     """
+    from google_sheets import append_call_to_sheet
+
     audio_path = None
 
     try:
@@ -130,14 +224,16 @@ async def process_call(
 
         logger.info(f"Транскрипция готова: {len(transcript)} символов")
 
-        # 3. Анализируем через GPT-4o
-        analysis = await analyze_call(
+        # 3. Анализируем через GPT-4o, получаем структурированный результат
+        analysis_result = await analyze_call(
             call_id=call_id,
             transcript=transcript,
             manager_name=manager_name,
             direction=direction,
             duration=duration,
         )
+
+        analysis_text = analysis_result["raw_text"]
 
         # 4. Отправляем результат в Telegram
         await send_analysis_result(
@@ -148,8 +244,32 @@ async def process_call(
             direction=direction,
             caller_number=caller_number,
             called_number=called_number,
-            analysis=analysis,
+            analysis=analysis_text,
         )
+
+        # 5. Записываем в Google Sheets
+        # Определяем номер клиента (кто не менеджер)
+        if direction == "outgoing":
+            client_number = called_number
+        else:
+            client_number = caller_number
+
+        sheet_data = {
+            "call_id": call_id,
+            "call_start_timestamp": call_start_timestamp,
+            "call_start": call_start,
+            "manager_name": manager_name,
+            "manager_short_num": manager_short_num or "",
+            "client_number": client_number,
+            "direction": direction,
+            "duration": duration,
+            "cqr_total": analysis_result["cqr_total"],
+            "cqr_scores": analysis_result["cqr_scores"],
+            "client_pains": analysis_result["client_pains"],
+            "recommendation": analysis_result["recommendation"],
+        }
+
+        await append_call_to_sheet(sheet_data)
 
         logger.info(f"Звонок {call_id} успешно обработан")
 
@@ -254,16 +374,18 @@ async def analyze_call(
     manager_name: str,
     direction: str,
     duration: int,
-) -> str:
+) -> dict:
     """
     Анализирует транскрипт звонка через OpenAI GPT-4o.
 
+    Возвращает dict с raw_text и структурированными CQR-данными.
     Retry: 3 попытки с exponential backoff (1с, 2с, 4с).
-    Если GPT-4o недоступен — возвращает сырой транскрипт.
     """
+    fallback_text = f"⚠️ Анализ недоступен. Сырой транскрипт звонка {call_id}:\n\n{transcript}"
+
     if not openai_client:
         logger.warning("OpenAI API не настроен, возвращаем сырой транскрипт")
-        return f"⚠️ Анализ недоступен. Сырой транскрипт звонка {call_id}:\n\n{transcript}"
+        return parse_cqr_result(fallback_text)
 
     # Формируем промпт
     prompt = ANALYSIS_SYSTEM_PROMPT.format(
@@ -290,8 +412,8 @@ async def analyze_call(
                 temperature=0.3,
                 max_tokens=2000,
             )
-            analysis = response.choices[0].message.content
-            return analysis or "Анализ не получен"
+            analysis_text = response.choices[0].message.content or "Анализ не получен"
+            return parse_cqr_result(analysis_text)
 
         except Exception as e:
             logger.warning(
@@ -301,4 +423,4 @@ async def analyze_call(
                 await asyncio.sleep(delays[attempt])
             else:
                 logger.error(f"GPT-4o недоступен после {max_retries} попыток")
-                return f"⚠️ Анализ недоступен. Сырой транскрипт звонка {call_id}:\n\n{transcript}"
+                return parse_cqr_result(fallback_text)

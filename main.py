@@ -6,6 +6,7 @@ Sipuni Call Analyzer - FastAPI Application
 """
 
 import logging
+import os
 from contextlib import asynccontextmanager
 from datetime import datetime
 from typing import Optional
@@ -16,6 +17,7 @@ from fastapi import BackgroundTasks, FastAPI, Request
 from pydantic import BaseModel, ConfigDict, field_validator
 
 from analyzer import process_call
+from config import get_manager_name
 from telegram_bot import send_error_notification
 
 load_dotenv()
@@ -101,13 +103,17 @@ class SipuniWebhook(BaseModel):
         return self.dst_num or self.short_dst_num or "Неизвестный"
 
     @property
-    def manager_name(self) -> str:
-        """Имя менеджера: short_src_num для исходящих, last_called для входящих."""
+    def manager_short_num(self) -> Optional[str]:
+        """Внутренний номер менеджера."""
         if self.direction == "outgoing":
-            num = self.short_src_num or self.user_id or "?"
+            return self.short_src_num or self.user_id
         else:
-            num = self.last_called or self.short_dst_num or self.user_id or "?"
-        return f"Менеджер (внутр. {num})"
+            return self.last_called or self.short_dst_num or self.user_id
+
+    @property
+    def manager_name(self) -> str:
+        """Имя менеджера из маппинга (или fallback на внутренний номер)."""
+        return get_manager_name(self.manager_short_num)
 
     @property
     def call_start(self) -> Optional[str]:
@@ -266,6 +272,8 @@ async def process_call_safe(webhook_data: SipuniWebhook):
             direction=webhook_data.direction,
             manager_name=webhook_data.manager_name,
             call_start=webhook_data.call_start,
+            manager_short_num=webhook_data.manager_short_num,
+            call_start_timestamp=webhook_data.call_start_timestamp,
         )
     except Exception as e:
         logger.exception(f"Ошибка обработки звонка {webhook_data.call_id}")
