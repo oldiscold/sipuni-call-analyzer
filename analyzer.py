@@ -332,9 +332,8 @@ async def download_audio(call_id: str, recording_url: str) -> Path:
     TEMP_DIR.mkdir(parents=True, exist_ok=True)
     audio_path = TEMP_DIR / f"{call_id}.mp3"
 
+    # Sipuni-записи авторизуются через параметры hash/user в URL — заголовок не нужен
     headers = {}
-    if SIPUNI_API_KEY:
-        headers["Authorization"] = f"Bearer {SIPUNI_API_KEY}"
 
     max_retries = 2
     for attempt in range(max_retries):
@@ -365,12 +364,12 @@ async def download_audio(call_id: str, recording_url: str) -> Path:
 
         except Exception as e:
             logger.warning(
-                f"Попытка {attempt + 1}/{max_retries} скачивания не удалась: {e}"
+                f"Попытка {attempt + 1}/{max_retries} скачивания не удалась: {type(e).__name__}: {e!r}"
             )
             if attempt < max_retries - 1:
                 await asyncio.sleep(2)
             else:
-                raise RuntimeError(f"Не удалось скачать аудио: {e}")
+                raise RuntimeError(f"Не удалось скачать аудио: {type(e).__name__}: {e!r}")
 
 
 async def transcribe_audio(
