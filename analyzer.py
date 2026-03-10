@@ -63,7 +63,11 @@ ANALYSIS_SYSTEM_PROMPT = """Ты — эксперт по контролю кач
 
 ДОПОЛНИТЕЛЬНЫЙ АНАЛИЗ:
 
-БОЛИ КЛИЕНТА: Выдели ВСЕ ключевые проблемы, страхи, сомнения и потребности клиента — как озвученные напрямую, так и подразумеваемые из контекста. На каждую боль — развёрнутое описание в 1-2 предложения с конкретикой из разговора.
+БОЛИ КЛИЕНТА (БИЗНЕС): Выдели ключевые БИЗНЕС-ПРОБЛЕМЫ клиента — что мешает его бизнесу расти, что не работает, от чего он страдает как предприниматель/руководитель. Формулируй конкретно с привязкой к разговору, 1-2 предложения на каждую боль. Если клиент не озвучил бизнес-болей — напиши "Не выявлены (менеджер не выяснил)".
+
+ЖЕЛАНИЯ КЛИЕНТА: Что клиент хочет получить для своего бизнеса — цели, планы, ожидания, к чему стремится (рост продаж, масштабирование, автоматизация, выход на новый рынок и т.д.). Формулируй конкретно из контекста разговора, 1-2 предложения на каждый пункт. Если не озвучил — напиши "Не выявлены (менеджер не выяснил)".
+
+ВОЗРАЖЕНИЯ КЛИЕНТА: Перечисли все возражения, сомнения и отговорки клиента из разговора. Для каждого укажи: что сказал клиент → как отреагировал менеджер. Если возражений не было — напиши "Возражений не было".
 
 НИША КЛИЕНТА: Если в разговоре упоминается сфера деятельности, бизнес, профессия или компания клиента — укажи. Если не упоминается — напиши "Не определена".
 
@@ -81,10 +85,17 @@ ANALYSIS_SYSTEM_PROMPT = """Ты — эксперт по контролю кач
 ✨ Выгоды: [балл]
 👉 Следующий шаг: [балл]
 
-🔥 Боли клиента:
-- [боль 1 — развёрнуто, 1-2 предложения с конкретикой из разговора]
-- [боль 2 — развёрнуто]
-- [боль 3 если есть — развёрнуто]
+🔥 Боли клиента (бизнес):
+- [боль 1 — конкретная бизнес-проблема, 1-2 предложения]
+- [боль 2]
+
+🎯 Желания клиента:
+- [желание 1 — конкретная бизнес-цель, 1-2 предложения]
+- [желание 2]
+
+⚡ Возражения клиента:
+- [возражение 1]: клиент сказал "..." → менеджер [отработал/не отработал/проигнорировал]
+- [возражение 2]
 
 🏢 Ниша клиента: [ниша или "Не определена"]
 📢 Источник: [откуда узнал или "Не определён"]
@@ -123,6 +134,8 @@ def parse_cqr_result(analysis_text: str) -> dict:
         },
         "cqr_total": "",
         "client_pains": "",
+        "client_desires": "",
+        "client_objections": "",
         "client_niche": "",
         "lead_source": "",
         "recommendation": "",
@@ -161,19 +174,25 @@ def parse_cqr_result(analysis_text: str) -> dict:
         except ValueError:
             pass
 
-    # Боли клиента: всё между "Боли клиента:" и следующим разделом
-    pains_match = re.search(
-        r"Боли клиента:\s*\n((?:[-•]\s*.+\n?)+)",
-        analysis_text,
-    )
-    if pains_match:
-        pains_raw = pains_match.group(1).strip()
-        pains_lines = [
+    def _parse_bullets(pattern: str) -> str:
+        match = re.search(pattern, analysis_text, re.DOTALL)
+        if not match:
+            return ""
+        lines = [
             line.lstrip("-•").strip()
-            for line in pains_raw.splitlines()
+            for line in match.group(1).splitlines()
             if line.strip()
         ]
-        result["client_pains"] = "; ".join(pains_lines)
+        return "; ".join(lines)
+
+    # Боли клиента (бизнес)
+    result["client_pains"] = _parse_bullets(r"Боли клиента.*?:\s*\n((?:[-•]\s*.+\n?)+)")
+
+    # Желания клиента
+    result["client_desires"] = _parse_bullets(r"Желания клиента:\s*\n((?:[-•]\s*.+\n?)+)")
+
+    # Возражения клиента
+    result["client_objections"] = _parse_bullets(r"Возражения клиента:\s*\n((?:[-•]\s*.+\n?)+)")
 
     # Ниша клиента
     niche_match = re.search(r"Ниша клиента:\s*(.+?)(?:\n|$)", analysis_text)
@@ -285,6 +304,8 @@ async def process_call(
             "cqr_total": analysis_result["cqr_total"],
             "cqr_scores": analysis_result["cqr_scores"],
             "client_pains": analysis_result["client_pains"],
+            "client_desires": analysis_result["client_desires"],
+            "client_objections": analysis_result["client_objections"],
             "client_niche": analysis_result["client_niche"],
             "lead_source": analysis_result["lead_source"],
             "recommendation": analysis_result["recommendation"],
@@ -431,7 +452,7 @@ async def analyze_call(
                     {"role": "user", "content": prompt},
                 ],
                 temperature=0.3,
-                max_tokens=2000,
+                max_tokens=3000,
             )
             analysis_text = response.choices[0].message.content or "Анализ не получен"
             return parse_cqr_result(analysis_text)
