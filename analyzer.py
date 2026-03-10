@@ -186,21 +186,21 @@ def parse_cqr_result(analysis_text: str) -> dict:
         return "; ".join(lines)
 
     # Боли клиента (бизнес)
-    result["client_pains"] = _parse_bullets(r"Боли клиента.*?:\s*\n((?:[-•]\s*.+\n?)+)")
+    result["client_pains"] = _parse_bullets(r"(?:🔥\s*)?Боли клиента[^:]*:\s*\n((?:[-•]\s*.+\n?)+)")
 
     # Желания клиента
-    result["client_desires"] = _parse_bullets(r"Желания клиента:\s*\n((?:[-•]\s*.+\n?)+)")
+    result["client_desires"] = _parse_bullets(r"(?:🎯\s*)?Желания клиента[^:]*:\s*\n((?:[-•]\s*.+\n?)+)")
 
     # Возражения клиента
-    result["client_objections"] = _parse_bullets(r"Возражения клиента:\s*\n((?:[-•]\s*.+\n?)+)")
+    result["client_objections"] = _parse_bullets(r"(?:⚡\s*)?Возражения клиента[^:]*:\s*\n((?:[-•]\s*.+\n?)+)")
 
     # Ниша клиента
-    niche_match = re.search(r"Ниша клиента:\s*(.+?)(?:\n|$)", analysis_text)
+    niche_match = re.search(r"(?:🏢\s*)?Ниша клиента[^:]*:\s*(.+?)(?:\n|$)", analysis_text)
     if niche_match:
         result["client_niche"] = niche_match.group(1).strip()
 
     # Источник обращения
-    source_match = re.search(r"Источник:\s*(.+?)(?:\n|$)", analysis_text)
+    source_match = re.search(r"(?:📢\s*)?Источник[^:]*:\s*(.+?)(?:\n|$)", analysis_text)
     if source_match:
         result["lead_source"] = source_match.group(1).strip()
 
