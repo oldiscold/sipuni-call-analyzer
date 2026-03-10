@@ -470,6 +470,7 @@ async def analyze_call(
                 max_tokens=3000,
             )
             analysis_text = response.choices[0].message.content or "Анализ не получен"
+            logger.info(f"=== RAW LLM RESPONSE ===\n{analysis_text}\n=== END RAW RESPONSE ===")
             return parse_cqr_result(analysis_text)
 
         except Exception as e:
