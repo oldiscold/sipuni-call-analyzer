@@ -106,7 +106,8 @@ ANALYSIS_SYSTEM_PROMPT = """Ты — эксперт по контролю кач
 
 💡 Рекомендация: [развёрнуто — 3-5 предложений. Конкретные действия для менеджера: что делать в следующем контакте, как исправить ошибки этого звонка, какие техники применить]
 
-Только этот формат. Без вступлений и пояснений к пунктам."""
+Только этот формат. Без вступлений и пояснений к пунктам.
+ВАЖНО: Строго соблюдай порядок блоков как указано выше. Не меняй последовательность."""
 
 
 def parse_cqr_result(analysis_text: str) -> dict:
@@ -138,6 +139,7 @@ def parse_cqr_result(analysis_text: str) -> dict:
         "client_objections": "",
         "client_niche": "",
         "lead_source": "",
+        "key_moment": "",
         "recommendation": "",
         "raw_text": analysis_text,
     }
@@ -174,40 +176,36 @@ def parse_cqr_result(analysis_text: str) -> dict:
         except ValueError:
             pass
 
-    def _parse_bullets(pattern: str) -> str:
-        match = re.search(pattern, analysis_text, re.DOTALL)
+    def _parse_section(header_pattern: str) -> str:
+        """Извлекает содержимое секции между заголовком и следующим блоком (эмодзи в начале строки)."""
+        match = re.search(header_pattern, analysis_text, re.IGNORECASE)
         if not match:
             return ""
-        lines = [
+        start = match.end()
+        # Следующий блок: строка начинающаяся с эмодзи (диапазоны Unicode) или конец текста
+        next_block = re.search(r"\n(?=[\U0001F300-\U0001FAFF\u2600-\u27BF⚡🔥🎯📞🗣💪🔍📦🛡✨👉🏢📢🔑💡📊])", analysis_text[start:])
+        if next_block:
+            content = analysis_text[start : start + next_block.start()]
+        else:
+            content = analysis_text[start:]
+
+        lines = content.strip().splitlines()
+        bullet_lines = [
             line.lstrip("-•").strip()
-            for line in match.group(1).splitlines()
-            if line.strip()
+            for line in lines
+            if line.strip().startswith(("-", "•"))
         ]
-        return "; ".join(lines)
+        if bullet_lines:
+            return "; ".join(bullet_lines)
+        return content.strip()
 
-    # Боли клиента (бизнес)
-    result["client_pains"] = _parse_bullets(r"(?:🔥\s*)?Боли клиента[^:]*:\s*\n((?:[-•]\s*.+\n?)+)")
-
-    # Желания клиента
-    result["client_desires"] = _parse_bullets(r"(?:🎯\s*)?Желания клиента[^:]*:\s*\n((?:[-•]\s*.+\n?)+)")
-
-    # Возражения клиента
-    result["client_objections"] = _parse_bullets(r"(?:⚡\s*)?Возражения клиента[^:]*:\s*\n((?:[-•]\s*.+\n?)+)")
-
-    # Ниша клиента
-    niche_match = re.search(r"(?:🏢\s*)?Ниша клиента[^:]*:\s*(.+?)(?:\n|$)", analysis_text)
-    if niche_match:
-        result["client_niche"] = niche_match.group(1).strip()
-
-    # Источник обращения
-    source_match = re.search(r"(?:📢\s*)?Источник[^:]*:\s*(.+?)(?:\n|$)", analysis_text)
-    if source_match:
-        result["lead_source"] = source_match.group(1).strip()
-
-    # Рекомендация
-    rec_match = re.search(r"Рекомендация:\s*(.+?)(?:\n\n|\Z)", analysis_text, re.DOTALL)
-    if rec_match:
-        result["recommendation"] = rec_match.group(1).strip()
+    result["client_pains"]      = _parse_section(r"(?:🔥\s*)?Боли клиента[^:]*:")
+    result["client_desires"]    = _parse_section(r"(?:🎯\s*)?Желания клиента[^:]*:")
+    result["client_objections"] = _parse_section(r"(?:⚡\s*)?Возражения клиента[^:]*:")
+    result["client_niche"]      = _parse_section(r"(?:🏢\s*)?Ниша клиента[^:]*:")
+    result["lead_source"]       = _parse_section(r"(?:📢\s*)?Источник[^:]*:")
+    result["key_moment"]        = _parse_section(r"(?:🔑\s*)?Ключевой момент[^:]*:")
+    result["recommendation"]    = _parse_section(r"(?:💡\s*)?Рекомендация[^:]*:")
 
     return result
 
