@@ -341,9 +341,24 @@ async def download_audio(call_id: str, recording_url: str) -> Path:
     max_retries = 2
     for attempt in range(max_retries):
         try:
-            async with httpx.AsyncClient(timeout=60.0) as client:
+            async with httpx.AsyncClient(timeout=60.0, follow_redirects=True) as client:
                 response = await client.get(recording_url, headers=headers)
-                response.raise_for_status()
+                logger.info(
+                    f"Скачивание аудио: HTTP {response.status_code}, "
+                    f"Content-Type: {response.headers.get('content-type', '?')}, "
+                    f"размер: {len(response.content)} байт"
+                )
+                if response.status_code != 200:
+                    body_preview = response.text[:200]
+                    raise RuntimeError(
+                        f"HTTP {response.status_code}: {body_preview}"
+                    )
+
+                if len(response.content) < 1000:
+                    raise RuntimeError(
+                        f"Файл слишком маленький ({len(response.content)} байт) — "
+                        f"вероятно ошибка авторизации. Ответ: {response.text[:200]}"
+                    )
 
                 with open(audio_path, "wb") as f:
                     f.write(response.content)
