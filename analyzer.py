@@ -127,16 +127,18 @@ def parse_cqr_result(analysis_text: str) -> dict:
     if not analysis_text or analysis_text.startswith("⚠️"):
         return result
 
-    # Убираем возможные markdown-блоки
-    clean = analysis_text.strip()
-    if clean.startswith("```"):
-        clean = re.sub(r"^```(?:json)?\s*", "", clean)
-        clean = re.sub(r"\s*```$", "", clean)
+    # Извлекаем JSON-объект: ищем первый { и последний }
+    start = analysis_text.find('{')
+    end = analysis_text.rfind('}')
+    if start == -1 or end == -1 or end <= start:
+        logger.error(f"JSON объект не найден в ответе LLM: {analysis_text[:200]!r}")
+        return result
+    clean = analysis_text[start:end + 1]
 
     try:
         data = json.loads(clean)
     except json.JSONDecodeError as e:
-        logger.error(f"Не удалось распарсить JSON от LLM: {e}")
+        logger.error(f"Не удалось распарсить JSON от LLM: {e}\n{clean[:300]!r}")
         return result
 
     score_keys = ["greeting", "speech", "initiative", "problem", "product",
