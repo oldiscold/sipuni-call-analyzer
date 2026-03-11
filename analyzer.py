@@ -85,29 +85,32 @@ ANALYSIS_SYSTEM_PROMPT = """Ты — эксперт по контролю кач
 ✨ Выгоды: [балл]
 👉 Следующий шаг: [балл]
 
-🔥 Боли клиента (бизнес):
+[БОЛИ_БИЗНЕС]
 - [боль 1 — конкретная бизнес-проблема, 1-2 предложения]
 - [боль 2]
+[/БОЛИ_БИЗНЕС]
 
-🎯 Желания клиента:
+[ЖЕЛАНИЯ]
 - [желание 1 — конкретная бизнес-цель, 1-2 предложения]
 - [желание 2]
+[/ЖЕЛАНИЯ]
 
-⚡ Возражения клиента:
+[ВОЗРАЖЕНИЯ]
 - [возражение 1]: клиент сказал "..." → менеджер [отработал/не отработал/проигнорировал]
 - [возражение 2]
+[/ВОЗРАЖЕНИЯ]
 
-🏢 Ниша клиента: [ниша или "Не определена"]
-📢 Источник: [откуда узнал или "Не определён"]
+[НИША] [ниша или "Не определена"] [/НИША]
+[ИСТОЧНИК] [откуда узнал или "Не определён"] [/ИСТОЧНИК]
 
 📊 CQR: [сумма]/9
 
-🔑 Ключевой момент: [развёрнуто — 3-5 предложений. Опиши самый важный момент звонка: что именно произошло, как отреагировал клиент, почему это критично для сделки]
+[КЛЮЧЕВОЙ_МОМЕНТ] [развёрнуто — 3-5 предложений. Опиши самый важный момент звонка: что именно произошло, как отреагировал клиент, почему это критично для сделки] [/КЛЮЧЕВОЙ_МОМЕНТ]
 
-💡 Рекомендация: [развёрнуто — 3-5 предложений. Конкретные действия для менеджера: что делать в следующем контакте, как исправить ошибки этого звонка, какие техники применить]
+[РЕКОМЕНДАЦИЯ] [развёрнуто — 3-5 предложений. Конкретные действия для менеджера: что делать в следующем контакте, как исправить ошибки этого звонка, какие техники применить] [/РЕКОМЕНДАЦИЯ]
 
 Только этот формат. Без вступлений и пояснений к пунктам.
-ВАЖНО: Строго соблюдай порядок блоков как указано выше. Не меняй последовательность."""
+ВАЖНО: Строго соблюдай порядок блоков. Теги [БОЛИ_БИЗНЕС], [ЖЕЛАНИЯ], [ВОЗРАЖЕНИЯ], [НИША], [ИСТОЧНИК], [КЛЮЧЕВОЙ_МОМЕНТ], [РЕКОМЕНДАЦИЯ] обязательны."""
 
 
 def parse_cqr_result(analysis_text: str) -> dict:
@@ -176,59 +179,25 @@ def parse_cqr_result(analysis_text: str) -> dict:
         except ValueError:
             pass
 
-    def _parse_section(header_pattern: str) -> str:
-        match = re.search(header_pattern, analysis_text, re.IGNORECASE)
+    def _parse_tag(tag: str) -> str:
+        pattern = rf"\[{tag}\]\s*(.*?)\s*\[/{tag}\]"
+        match = re.search(pattern, analysis_text, re.DOTALL)
         if not match:
             return ""
-        start = match.end()
-
-        # Все возможные заголовки блоков (эмодзи опциональны, привязка к началу строки)
-        all_headers = [
-            r"(?:📞\s*)?Приветствие:",
-            r"(?:🗣\s*)?Речь:",
-            r"(?:💪\s*)?Инициатива:",
-            r"(?:🔍\s*)?Проблема:",
-            r"(?:📦\s*)?Продукт:",
-            r"(?:🛡\s*)?Возражение:",
-            r"(?:🎯\s*)?Дожим:",
-            r"(?:✨\s*)?Выгоды:",
-            r"(?:👉\s*)?Следующий шаг:",
-            r"(?:🔥\s*)?Боли клиента",
-            r"(?:🎯\s*)?Желания клиента",
-            r"(?:⚡\s*)?Возражения клиента",
-            r"(?:🏢\s*)?Ниша клиента",
-            r"(?:📢\s*)?Источник:",
-            r"(?:📊\s*)?CQR:",
-            r"(?:🔑\s*)?Ключевой момент",
-            r"(?:💡\s*)?Рекомендация:",
-        ]
-
-        # Найти ближайший следующий заголовок (только с начала строки — re.MULTILINE)
-        nearest_end = len(analysis_text)
-        for h in all_headers:
-            m = re.search(r"^\s*" + h, analysis_text[start:], re.IGNORECASE | re.MULTILINE)
-            if m:
-                nearest_end = min(nearest_end, start + m.start())
-
-        content = analysis_text[start:nearest_end]
-
-        lines = content.strip().splitlines()
-        bullet_lines = [
-            line.lstrip("-•").strip()
-            for line in lines
-            if line.strip().startswith(("-", "•"))
-        ]
+        content = match.group(1).strip()
+        lines = content.splitlines()
+        bullet_lines = [line.lstrip("-•").strip() for line in lines if line.strip().startswith(("-", "•"))]
         if bullet_lines:
             return "; ".join(bullet_lines)
-        return content.strip()
+        return content
 
-    result["client_pains"]      = _parse_section(r"(?:🔥\s*)?Боли клиента[^:]*:")
-    result["client_desires"]    = _parse_section(r"(?:🎯\s*)?Желания клиента[^:]*:")
-    result["client_objections"] = _parse_section(r"(?:⚡\s*)?Возражения клиента[^:]*:")
-    result["client_niche"]      = _parse_section(r"(?:🏢\s*)?Ниша клиента[^:]*:")
-    result["lead_source"]       = _parse_section(r"(?:📢\s*)?Источник[^:]*:")
-    result["key_moment"]        = _parse_section(r"(?:🔑\s*)?Ключевой момент[^:]*:")
-    result["recommendation"]    = _parse_section(r"(?:💡\s*)?Рекомендация[^:]*:")
+    result["client_pains"]      = _parse_tag("БОЛИ_БИЗНЕС")
+    result["client_desires"]    = _parse_tag("ЖЕЛАНИЯ")
+    result["client_objections"] = _parse_tag("ВОЗРАЖЕНИЯ")
+    result["client_niche"]      = _parse_tag("НИША")
+    result["lead_source"]       = _parse_tag("ИСТОЧНИК")
+    result["key_moment"]        = _parse_tag("КЛЮЧЕВОЙ_МОМЕНТ")
+    result["recommendation"]    = _parse_tag("РЕКОМЕНДАЦИЯ")
 
     return result
 
