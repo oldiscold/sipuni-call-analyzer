@@ -177,17 +177,40 @@ def parse_cqr_result(analysis_text: str) -> dict:
             pass
 
     def _parse_section(header_pattern: str) -> str:
-        """Извлекает содержимое секции между заголовком и следующим блоком (эмодзи в начале строки)."""
         match = re.search(header_pattern, analysis_text, re.IGNORECASE)
         if not match:
             return ""
         start = match.end()
-        # Следующий блок: строка начинающаяся с эмодзи (диапазоны Unicode) или конец текста
-        next_block = re.search(r"\n(?=[\U0001F300-\U0001FAFF\u2600-\u27BF⚡🔥🎯📞🗣💪🔍📦🛡✨👉🏢📢🔑💡📊])", analysis_text[start:])
-        if next_block:
-            content = analysis_text[start : start + next_block.start()]
-        else:
-            content = analysis_text[start:]
+
+        # Все возможные заголовки блоков — ищем ближайший после текущей позиции
+        all_headers = [
+            r"📞\s*Приветствие:",
+            r"🗣\s*Речь:",
+            r"💪\s*Инициатива:",
+            r"🔍\s*Проблема:",
+            r"📦\s*Продукт:",
+            r"🛡\s*Возражение:",
+            r"🎯\s*Дожим:",
+            r"✨\s*Выгоды:",
+            r"👉\s*Следующий шаг:",
+            r"🔥\s*Боли клиента",
+            r"🎯\s*Желания клиента",
+            r"⚡\s*Возражения клиента",
+            r"🏢\s*Ниша клиента",
+            r"📢\s*Источник",
+            r"📊\s*CQR:",
+            r"🔑\s*Ключевой момент",
+            r"💡\s*Рекомендация",
+        ]
+
+        # Найти ближайший следующий заголовок
+        nearest_end = len(analysis_text)
+        for h in all_headers:
+            m = re.search(h, analysis_text[start:])
+            if m:
+                nearest_end = min(nearest_end, start + m.start())
+
+        content = analysis_text[start:nearest_end]
 
         lines = content.strip().splitlines()
         bullet_lines = [
