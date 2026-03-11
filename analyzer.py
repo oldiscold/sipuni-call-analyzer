@@ -350,37 +350,41 @@ async def download_audio(call_id: str, recording_url: str) -> Path:
     TEMP_DIR.mkdir(parents=True, exist_ok=True)
     audio_path = TEMP_DIR / f"{call_id}.mp3"
 
-    max_retries = 3
+    headers = {}
+    if SIPUNI_API_KEY:
+        headers["Authorization"] = f"Bearer {SIPUNI_API_KEY}"
+
+    max_retries = 2
     for attempt in range(max_retries):
         try:
-            timeout = httpx.Timeout(300.0, connect=15.0)
-            async with httpx.AsyncClient(timeout=timeout, follow_redirects=True) as client:
-                response = await client.get(recording_url)
-
+            async with httpx.AsyncClient(timeout=60.0, follow_redirects=True) as client:
+                response = await client.get(recording_url, headers=headers)
                 logger.info(
                     f"Скачивание аудио: HTTP {response.status_code}, "
                     f"Content-Type: {response.headers.get('content-type', '?')}, "
                     f"размер: {len(response.content)} байт"
                 )
-
                 if response.status_code != 200:
+                    body_preview = response.text[:200]
                     raise RuntimeError(
-                        f"HTTP {response.status_code}: {response.text[:200]}"
+                        f"HTTP {response.status_code}: {body_preview}"
                     )
 
                 if len(response.content) < 1000:
                     raise RuntimeError(
-                        f"Файл слишком маленький ({len(response.content)} байт)"
+                        f"Файл слишком маленький ({len(response.content)} байт) — "
+                        f"вероятно ошибка авторизации. Ответ: {response.text[:200]}"
                     )
 
-                audio_path.write_bytes(response.content)
-                logger.info(f"Аудио скачано: {audio_path}")
+                with open(audio_path, "wb") as f:
+                    f.write(response.content)
+
                 return audio_path
 
         except Exception as e:
             logger.warning(f"Попытка {attempt + 1}/{max_retries}: {repr(e)}")
             if attempt < max_retries - 1:
-                await asyncio.sleep(5)
+                await asyncio.sleep(2)
             else:
                 raise RuntimeError(f"Не удалось скачать аудио: {repr(e)}")
 
