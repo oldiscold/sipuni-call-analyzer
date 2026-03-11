@@ -353,7 +353,7 @@ async def download_audio(call_id: str, recording_url: str) -> Path:
     max_retries = 3
     for attempt in range(max_retries):
         try:
-            timeout = httpx.Timeout(15.0, read=120.0)
+            timeout = httpx.Timeout(None, connect=30.0)
             async with httpx.AsyncClient(timeout=timeout, follow_redirects=True) as client:
                 response = await client.get(recording_url)
 
