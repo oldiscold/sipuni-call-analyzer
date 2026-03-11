@@ -135,42 +135,69 @@ async def send_analysis_result(
     direction: str,
     caller_number: str,
     called_number: str,
-    analysis: str,
-    client_niche: str = "",
-    lead_source: str = "",
+    analysis_result: dict,
 ) -> bool:
     """
     Отправляет результат анализа звонка в Telegram.
 
-    Формирует сообщение с шапкой и фидбеком от GPT-4o.
+    Формирует сообщение из распарсенных полей analysis_result.
     """
-    # Форматируем дату
-    call_date = call_start or "Неизвестно"
+    scores = analysis_result.get("cqr_scores", {})
+    cqr_total = analysis_result.get("cqr_total", "")
+    client_niche = analysis_result.get("client_niche", "")
+    lead_source = analysis_result.get("lead_source", "")
 
-    # Форматируем направление
+    call_date = call_start or "Неизвестно"
     direction_text = format_direction(direction)
 
-    # Доп. поля (если определены)
     niche_line = f"\n🏢 Ниша: {client_niche}" if client_niche and client_niche != "Не определена" else ""
     source_line = f"\n📢 Источник: {lead_source}" if lead_source and lead_source != "Не определён" else ""
 
-    # Формируем сообщение
-    message = f"""📊 *Анализ звонка*
-👤 Менеджер: {manager_name}
-📅 Дата: {call_date}
-⏱ Длительность: {duration} сек
-{direction_text}: {caller_number} → {called_number}
-📋 Метод оценки: CQR (Call Quality Rate){niche_line}{source_line}
-━━━━━━━━━━━━━━━
-{analysis}"""
+    def score(val) -> str:
+        return str(val) if val != "" else "—"
+
+    scores_block = (
+        f"📞 Приветствие: {score(scores.get('greeting'))}\n"
+        f"🗣 Речь: {score(scores.get('speech'))}\n"
+        f"💪 Инициатива: {score(scores.get('initiative'))}\n"
+        f"🔍 Проблема: {score(scores.get('problem'))}\n"
+        f"📦 Продукт: {score(scores.get('product'))}\n"
+        f"🛡 Возражение: {score(scores.get('objection'))}\n"
+        f"🎯 Дожим: {score(scores.get('closing'))}\n"
+        f"✨ Выгоды: {score(scores.get('benefits'))}\n"
+        f"👉 Следующий шаг: {score(scores.get('next_step'))}\n"
+        f"📊 CQR: {score(cqr_total)}/9"
+    )
+
+    def block(emoji: str, title: str, text: str) -> str:
+        if not text:
+            return ""
+        return f"\n\n{emoji} {title}:\n{text}"
+
+    details = (
+        block("🔥", "Боли клиента", analysis_result.get("client_pains", ""))
+        + block("🎯", "Желания клиента", analysis_result.get("client_desires", ""))
+        + block("⚡", "Возражения клиента", analysis_result.get("client_objections", ""))
+        + block("🔑", "Ключевой момент", analysis_result.get("key_moment", ""))
+        + block("💡", "Рекомендация", analysis_result.get("recommendation", ""))
+    )
+
+    message = (
+        f"📊 *Анализ звонка*\n"
+        f"👤 Менеджер: {manager_name}\n"
+        f"📅 Дата: {call_date}\n"
+        f"⏱ Длительность: {duration} сек\n"
+        f"{direction_text}: {caller_number} → {called_number}\n"
+        f"📋 CQR (Call Quality Rate){niche_line}{source_line}\n"
+        f"━━━━━━━━━━━━━━━\n"
+        f"{scores_block}"
+        f"{details}"
+    )
 
     logger.info(f"Отправляем анализ звонка {call_id} в Telegram")
 
-    # Пробуем отправить с Markdown
     success = await send_message(message, ParseMode.MARKDOWN)
-
     if not success:
-        # Если не получилось с Markdown — отправляем без форматирования
         plain_message = message.replace("*", "").replace("_", "")
         success = await send_message(plain_message)
 

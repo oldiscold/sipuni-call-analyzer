@@ -5,6 +5,7 @@ Sipuni Call Analyzer - Транскрипция и анализ звонков
 """
 
 import asyncio
+import json
 import logging
 import os
 import re
@@ -73,44 +74,30 @@ ANALYSIS_SYSTEM_PROMPT = """Ты — эксперт по контролю кач
 
 ИСТОЧНИК ОБРАЩЕНИЯ: Если клиент упоминает, откуда узнал о нас (реклама, рекомендация, сайт, Instagram, 2GIS и т.д.) — укажи. Если не упоминается — напиши "Не определён".
 
-ФОРМАТ ОТВЕТА (строго соблюдай, без вступлений и пояснений к пунктам):
+Ответь СТРОГО в формате JSON, без markdown-блоков, без пояснений, только JSON:
 
-📞 Приветствие: [балл]
-🗣 Речь: [балл]
-💪 Инициатива: [балл]
-🔍 Проблема: [балл]
-📦 Продукт: [балл]
-🛡 Возражение: [балл]
-🎯 Дожим: [балл]
-✨ Выгоды: [балл]
-👉 Следующий шаг: [балл]
+{
+  "greeting": 0,
+  "speech": 0,
+  "initiative": 0,
+  "problem": 0,
+  "product": 0,
+  "objection": 0,
+  "closing": 0,
+  "benefits": 0,
+  "next_step": 0,
+  "cqr_total": 0,
+  "client_pains": "текст болей бизнеса или Не выявлены",
+  "client_desires": "текст желаний или Не выявлены",
+  "client_objections": "текст возражений или Возражений не было",
+  "client_niche": "ниша или Не определена",
+  "lead_source": "источник или Не определён",
+  "key_moment": "развёрнутый ключевой момент 3-5 предложений",
+  "recommendation": "развёрнутая рекомендация 3-5 предложений"
+}
 
-[БОЛИ_БИЗНЕС]
-- [боль 1 — конкретная бизнес-проблема, 1-2 предложения]
-- [боль 2]
-[/БОЛИ_БИЗНЕС]
-
-[ЖЕЛАНИЯ]
-- [желание 1 — конкретная бизнес-цель, 1-2 предложения]
-- [желание 2]
-[/ЖЕЛАНИЯ]
-
-[ВОЗРАЖЕНИЯ]
-- [возражение 1]: клиент сказал "..." → менеджер [отработал/не отработал/проигнорировал]
-- [возражение 2]
-[/ВОЗРАЖЕНИЯ]
-
-[НИША] [ниша или "Не определена"] [/НИША]
-[ИСТОЧНИК] [откуда узнал или "Не определён"] [/ИСТОЧНИК]
-
-📊 CQR: [сумма]/9
-
-[КЛЮЧЕВОЙ_МОМЕНТ] [развёрнуто — 3-5 предложений. Опиши самый важный момент звонка: что именно произошло, как отреагировал клиент, почему это критично для сделки] [/КЛЮЧЕВОЙ_МОМЕНТ]
-
-[РЕКОМЕНДАЦИЯ] [развёрнуто — 3-5 предложений. Конкретные действия для менеджера: что делать в следующем контакте, как исправить ошибки этого звонка, какие техники применить] [/РЕКОМЕНДАЦИЯ]
-
-Только этот формат. Без вступлений и пояснений к пунктам.
-ВАЖНО: Строго соблюдай порядок блоков. Теги [БОЛИ_БИЗНЕС], [ЖЕЛАНИЯ], [ВОЗРАЖЕНИЯ], [НИША], [ИСТОЧНИК], [КЛЮЧЕВОЙ_МОМЕНТ], [РЕКОМЕНДАЦИЯ] обязательны."""
+Баллы — число: 0, 0.5 или 1. cqr_total — сумма всех баллов.
+Текстовые поля — строка. Если несколько пунктов, разделяй через "; "."""
 
 
 def parse_cqr_result(analysis_text: str) -> dict:
@@ -126,23 +113,13 @@ def parse_cqr_result(analysis_text: str) -> dict:
     """
     result = {
         "cqr_scores": {
-            "greeting": "",
-            "speech": "",
-            "initiative": "",
-            "problem": "",
-            "product": "",
-            "objection": "",
-            "closing": "",
-            "benefits": "",
-            "next_step": "",
+            "greeting": "", "speech": "", "initiative": "",
+            "problem": "", "product": "", "objection": "",
+            "closing": "", "benefits": "", "next_step": "",
         },
         "cqr_total": "",
-        "client_pains": "",
-        "client_desires": "",
-        "client_objections": "",
-        "client_niche": "",
-        "lead_source": "",
-        "key_moment": "",
+        "client_pains": "", "client_desires": "", "client_objections": "",
+        "client_niche": "", "lead_source": "", "key_moment": "",
         "recommendation": "",
         "raw_text": analysis_text,
     }
@@ -150,54 +127,41 @@ def parse_cqr_result(analysis_text: str) -> dict:
     if not analysis_text or analysis_text.startswith("⚠️"):
         return result
 
-    # Паттерны для извлечения баллов (учитываем эмодзи и вариации текста)
-    score_patterns = [
-        ("greeting",   r"Приветствие:\s*([\d.]+)"),
-        ("speech",     r"Речь:\s*([\d.]+)"),
-        ("initiative", r"Инициатива:\s*([\d.]+)"),
-        ("problem",    r"Проблема:\s*([\d.]+)"),
-        ("product",    r"Продукт:\s*([\d.]+)"),
-        ("objection",  r"Возражение:\s*([\d.]+)"),
-        ("closing",    r"Дожим:\s*([\d.]+)"),
-        ("benefits",   r"Выгоды:\s*([\d.]+)"),
-        ("next_step",  r"Следующий шаг:\s*([\d.]+)"),
-    ]
+    # Убираем возможные markdown-блоки
+    clean = analysis_text.strip()
+    if clean.startswith("```"):
+        clean = re.sub(r"^```(?:json)?\s*", "", clean)
+        clean = re.sub(r"\s*```$", "", clean)
 
-    for key, pattern in score_patterns:
-        match = re.search(pattern, analysis_text)
-        if match:
+    try:
+        data = json.loads(clean)
+    except json.JSONDecodeError as e:
+        logger.error(f"Не удалось распарсить JSON от LLM: {e}")
+        return result
+
+    score_keys = ["greeting", "speech", "initiative", "problem", "product",
+                  "objection", "closing", "benefits", "next_step"]
+    for key in score_keys:
+        val = data.get(key)
+        if val is not None:
             try:
-                result["cqr_scores"][key] = float(match.group(1))
-            except ValueError:
+                result["cqr_scores"][key] = float(val)
+            except (ValueError, TypeError):
                 pass
 
-    # Общий балл: "CQR: X/9" или "CQR: X"
-    total_match = re.search(r"CQR:\s*([\d.]+)(?:/9)?", analysis_text)
-    if total_match:
+    if data.get("cqr_total") is not None:
         try:
-            result["cqr_total"] = float(total_match.group(1))
-        except ValueError:
+            result["cqr_total"] = float(data["cqr_total"])
+        except (ValueError, TypeError):
             pass
 
-    def _parse_tag(tag: str) -> str:
-        pattern = rf"\[{tag}\]\s*(.*?)\s*\[/{tag}\]"
-        match = re.search(pattern, analysis_text, re.DOTALL)
-        if not match:
-            return ""
-        content = match.group(1).strip()
-        lines = content.splitlines()
-        bullet_lines = [line.lstrip("-•").strip() for line in lines if line.strip().startswith(("-", "•"))]
-        if bullet_lines:
-            return "; ".join(bullet_lines)
-        return content
-
-    result["client_pains"]      = _parse_tag("БОЛИ_БИЗНЕС")
-    result["client_desires"]    = _parse_tag("ЖЕЛАНИЯ")
-    result["client_objections"] = _parse_tag("ВОЗРАЖЕНИЯ")
-    result["client_niche"]      = _parse_tag("НИША")
-    result["lead_source"]       = _parse_tag("ИСТОЧНИК")
-    result["key_moment"]        = _parse_tag("КЛЮЧЕВОЙ_МОМЕНТ")
-    result["recommendation"]    = _parse_tag("РЕКОМЕНДАЦИЯ")
+    result["client_pains"]      = str(data.get("client_pains", ""))
+    result["client_desires"]    = str(data.get("client_desires", ""))
+    result["client_objections"] = str(data.get("client_objections", ""))
+    result["client_niche"]      = str(data.get("client_niche", ""))
+    result["lead_source"]       = str(data.get("lead_source", ""))
+    result["key_moment"]        = str(data.get("key_moment", ""))
+    result["recommendation"]    = str(data.get("recommendation", ""))
 
     return result
 
@@ -270,9 +234,7 @@ async def process_call(
             direction=direction,
             caller_number=caller_number,
             called_number=called_number,
-            analysis=analysis_text,
-            client_niche=analysis_result["client_niche"],
-            lead_source=analysis_result["lead_source"],
+            analysis_result=analysis_result,
         )
 
         # 5. Записываем в Google Sheets
