@@ -324,56 +324,42 @@ async def process_call(
 
 
 async def download_audio(call_id: str, recording_url: str) -> Path:
-    """
-    Скачивает аудиофайл по URL.
-
-    Retry: 2 попытки с паузой 2 секунды.
-    """
     TEMP_DIR.mkdir(parents=True, exist_ok=True)
     audio_path = TEMP_DIR / f"{call_id}.mp3"
 
-    # Sipuni-записи авторизуются через параметры hash/user в URL — заголовок не нужен
-    headers = {}
-
-    max_retries = 2
+    max_retries = 3
     for attempt in range(max_retries):
         try:
-            timeout = httpx.Timeout(15.0, read=30.0)
+            timeout = httpx.Timeout(15.0, read=120.0)
             async with httpx.AsyncClient(timeout=timeout, follow_redirects=True) as client:
-                async with client.stream("GET", recording_url, headers=headers) as response:
-                    logger.info(
-                        f"Скачивание аудио: HTTP {response.status_code}, "
-                        f"Content-Type: {response.headers.get('content-type', '?')}"
+                response = await client.get(recording_url)
+
+                logger.info(
+                    f"Скачивание аудио: HTTP {response.status_code}, "
+                    f"Content-Type: {response.headers.get('content-type', '?')}, "
+                    f"размер: {len(response.content)} байт"
+                )
+
+                if response.status_code != 200:
+                    raise RuntimeError(
+                        f"HTTP {response.status_code}: {response.text[:200]}"
                     )
-                    if response.status_code != 200:
-                        body = await response.aread()
-                        raise RuntimeError(
-                            f"HTTP {response.status_code}: {body[:200].decode(errors='replace')}"
-                        )
 
-                    total = 0
-                    with open(audio_path, "wb") as f:
-                        async for chunk in response.aiter_bytes(chunk_size=65536):
-                            f.write(chunk)
-                            total += len(chunk)
+                if len(response.content) < 1000:
+                    raise RuntimeError(
+                        f"Файл слишком маленький ({len(response.content)} байт)"
+                    )
 
-                    logger.info(f"Аудио скачано: {total} байт")
-
-                    if total < 1000:
-                        raise RuntimeError(
-                            f"Файл слишком маленький ({total} байт) — вероятно ошибка авторизации"
-                        )
-
-                    return audio_path
+                audio_path.write_bytes(response.content)
+                logger.info(f"Аудио скачано: {audio_path}")
+                return audio_path
 
         except Exception as e:
-            logger.warning(
-                f"Попытка {attempt + 1}/{max_retries} скачивания не удалась: {type(e).__name__}: {e!r}"
-            )
+            logger.warning(f"Попытка {attempt + 1}/{max_retries}: {repr(e)}")
             if attempt < max_retries - 1:
-                await asyncio.sleep(3)
+                await asyncio.sleep(5)
             else:
-                raise RuntimeError(f"Не удалось скачать аудио: {type(e).__name__}: {e!r}")
+                raise RuntimeError(f"Не удалось скачать аудио: {repr(e)}")
 
 
 async def transcribe_audio(
