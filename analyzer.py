@@ -276,6 +276,15 @@ async def process_call(
         )
 
         # 5. Записываем в Google Sheets
+        logger.info(f"=== PARSED FIELDS ===")
+        logger.info(f"client_pains: {analysis_result['client_pains']}")
+        logger.info(f"client_desires: {analysis_result['client_desires']}")
+        logger.info(f"client_objections: {analysis_result['client_objections']}")
+        logger.info(f"client_niche: {analysis_result['client_niche']}")
+        logger.info(f"lead_source: {analysis_result['lead_source']}")
+        logger.info(f"key_moment: {analysis_result['key_moment']}")
+        logger.info(f"recommendation: {analysis_result['recommendation']}")
+        logger.info(f"=== END PARSED FIELDS ===")
         # Определяем номер клиента (кто не менеджер)
         if direction == "outgoing":
             client_number = called_number
