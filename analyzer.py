@@ -276,6 +276,16 @@ async def process_call(
 
         await append_call_to_sheet(sheet_data)
 
+        # 6. Записываем примечание в AmoCRM
+        from amocrm import add_call_note_to_amocrm
+        await add_call_note_to_amocrm(
+            client_phone=client_number,
+            client_pains=analysis_result["client_pains"],
+            recommendation=analysis_result["recommendation"],
+            manager_name=manager_name,
+            call_start=call_start or "",
+        )
+
         logger.info(f"Звонок {call_id} успешно обработан")
 
     finally:
