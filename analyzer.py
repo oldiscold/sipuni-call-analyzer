@@ -249,8 +249,18 @@ async def process_call(
         logger.info(f"key_moment: {analysis_result['key_moment']}")
         logger.info(f"recommendation: {analysis_result['recommendation']}")
         logger.info(f"=== END PARSED FIELDS ===")
-        # Определяем номер клиента (кто не менеджер)
-        if direction == "outgoing":
+        # Определяем номер клиента — берём реальный внешний номер (≥10 цифр, начинается с 7 или 8)
+        # Внутренние номера Сипуни имеют формат 089071XXX и не являются реальными телефонами
+        caller_digits = "".join(c for c in caller_number if c.isdigit())
+        called_digits = "".join(c for c in called_number if c.isdigit())
+        caller_is_real = len(caller_digits) >= 10 and caller_digits[0] in ("7", "8")
+        called_is_real = len(called_digits) >= 10 and called_digits[0] in ("7", "8")
+
+        if called_is_real and not caller_is_real:
+            client_number = called_number
+        elif caller_is_real and not called_is_real:
+            client_number = caller_number
+        elif direction == "outgoing":
             client_number = called_number
         else:
             client_number = caller_number
