@@ -174,7 +174,7 @@ async def send_analysis_result(
     def block(emoji: str, title: str, text: str) -> str:
         if not text:
             return ""
-        return f"\n\n{emoji} {title}:\n{text}"
+        return f"\n\n{emoji} {title}:\n{escape_markdown(text)}"
 
     details = (
         block("🔥", "Боли клиента", analysis_result.get("client_pains", ""))

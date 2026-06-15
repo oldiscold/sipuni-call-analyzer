@@ -174,6 +174,21 @@ class AmoCRMClient:
             return True
         return False
 
+    def add_note_to_contact(self, contact_id: int, text: str) -> bool:
+        data = self._request(
+            "post",
+            "contacts/notes",
+            json=[{
+                "entity_id": contact_id,
+                "note_type": "common",
+                "params": {"text": text},
+            }],
+        )
+        if data is not None:
+            logger.info(f"AmoCRM: примечание добавлено к контакту {contact_id}")
+            return True
+        return False
+
     def add_call_analysis_note(
         self,
         client_phone: str,
@@ -194,9 +209,6 @@ class AmoCRMClient:
             return False
 
         lead_ids = self.get_contact_leads(contact_id)
-        if not lead_ids:
-            logger.info(f"AmoCRM: сделок не найдено для контакта {contact_id}")
-            return False
 
         lines = []
         if call_start:
@@ -216,7 +228,11 @@ class AmoCRMClient:
             lines.append(f"🎓 Как закрыть через ТЭМ:\n{product_recommendation}")
 
         note_text = "\n".join(lines)
-        return self.add_note_to_lead(lead_ids[0], note_text)
+        if lead_ids:
+            return self.add_note_to_lead(lead_ids[0], note_text)
+        else:
+            logger.info(f"AmoCRM: сделок нет у контакта {contact_id}, пишем примечание в контакт")
+            return self.add_note_to_contact(contact_id, note_text)
 
 
 _client: Optional[AmoCRMClient] = None
