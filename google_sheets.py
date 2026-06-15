@@ -47,6 +47,9 @@ SHEET_HEADERS = [
     "Рекомендация",
     "Ниша клиента",
     "Источник",
+    "ТЭМ Балл",
+    "Оценка применения ТЭМ",
+    "Рекомендация по ТЭМ",
 ]
 
 
@@ -145,6 +148,9 @@ def _build_row(call_data: dict) -> list[Any]:
         call_data.get("recommendation", ""),
         call_data.get("client_niche", ""),
         call_data.get("lead_source", ""),
+        call_data.get("product_score", ""),
+        call_data.get("product_feedback", ""),
+        call_data.get("product_recommendation", ""),
     ]
 
 

@@ -146,6 +146,7 @@ async def send_analysis_result(
     cqr_total = analysis_result.get("cqr_total", "")
     client_niche = analysis_result.get("client_niche", "")
     lead_source = analysis_result.get("lead_source", "")
+    product_score = analysis_result.get("product_score", "")
 
     call_date = call_start or "Неизвестно"
     direction_text = format_direction(direction)
@@ -166,7 +167,8 @@ async def send_analysis_result(
         f"🎯 Дожим: {score(scores.get('closing'))}\n"
         f"✨ Выгоды: {score(scores.get('benefits'))}\n"
         f"👉 Следующий шаг: {score(scores.get('next_step'))}\n"
-        f"📊 CQR: {score(cqr_total)}/9"
+        f"📊 CQR: {score(cqr_total)}/9\n"
+        f"📚 ТЭМ: {score(product_score)}/1"
     )
 
     def block(emoji: str, title: str, text: str) -> str:
@@ -180,6 +182,8 @@ async def send_analysis_result(
         + block("⚡", "Возражения клиента", analysis_result.get("client_objections", ""))
         + block("🔑", "Ключевой момент", analysis_result.get("key_moment", ""))
         + block("💡", "Рекомендация", analysis_result.get("recommendation", ""))
+        + block("📚", "Применение ТЭМ", analysis_result.get("product_feedback", ""))
+        + block("🎓", "Как закрыть через ТЭМ", analysis_result.get("product_recommendation", ""))
     )
 
     message = (

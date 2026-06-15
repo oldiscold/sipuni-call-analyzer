@@ -62,6 +62,19 @@ ANALYSIS_SYSTEM_PROMPT = """Ты — эксперт по контролю кач
 8. ВЫГОДЫ: 1=озвучил 3+ конкретные выгоды для клиента (не свойства продукта, а именно выгоды — что клиент получит), 0.5=1-2 выгоды, 0=не озвучил выгод.
 9. СЛЕДУЮЩИЙ ШАГ: 1=чётко договорился о следующем действии (точное время перезвона, перевод в WhatsApp/Telegram для продолжения, назначена встреча, отправка КП с датой обратной связи), 0.5=неточные сроки типа "я вам перезвоню"/"напишу на днях", 0=не обозначил следующий шаг.
 
+БАЗА ЗНАНИЙ ПРОДУКТА — ТЭМ (Технология Эффективного Менеджмента):
+ТЭМ — обучение для собственников и руководителей малого/среднего бизнеса. Ключевые боли и инструменты:
+• Текучка кадров → корпоративная культура на ценностях, пятиминутки (стоя 15 мин ежедневно), мотивация через личные цели сотрудников, ротация, воспитание изнутри.
+• Незаменимые сотрудники / всё на одном → стандартизация, регламенты, разделение труда, делегирование по 4 уровням (исполнитель → специалист → менеджер → директор).
+• Собственник перегружен / не умеет делегировать → 4 уровня управления, переход от "делаю сам" к "управляю системой", стандарт на каждый процесс.
+• Нет стратегии / не знаю куда расти → форсайт (стратегическая сессия), горизонт 2-3 года, 55 бизнес-моделей, постановка точки Б.
+• Плохой найм / не те люди → ценности первичны при найме (потом навыки), психотипы: продавцы — гиперсимы, бухгалтеры — тревожные; интервью по ценностям.
+• Хаотичные совещания / нет контроля → пятиминутки: 15 мин стоя ежедневно, только статусы и блокеры, не разбор полётов.
+• Низкий КПД команды → НОТ (научная организация труда), стандарты, принцип "делай меньше — получай больше", фокус на приоритетах.
+• Нет команды, только коллектив → команда строится на доверии и общей цели, коллектив — на правилах и контроле; инструменты: ценности, ритуалы, миссия.
+• Хаос в продажах / нет системы → воронка, скрипты, KPI для продавцов, разделение ролей (хантер vs фармер), CRM-мышление.
+• Конфликты / сложные сотрудники → культура открытого диалога, инструменты обратной связи, "жёсткие на системы, мягкие на людей".
+
 ДОПОЛНИТЕЛЬНЫЙ АНАЛИЗ:
 
 БОЛИ КЛИЕНТА (БИЗНЕС): Выдели ключевые БИЗНЕС-ПРОБЛЕМЫ клиента — что мешает его бизнесу расти, что не работает, от чего он страдает как предприниматель/руководитель. Формулируй конкретно с привязкой к разговору, 1-2 предложения на каждую боль. Если клиент не озвучил бизнес-болей — напиши "Не выявлены (менеджер не выяснил)".
@@ -73,6 +86,12 @@ ANALYSIS_SYSTEM_PROMPT = """Ты — эксперт по контролю кач
 НИША КЛИЕНТА: Если в разговоре упоминается сфера деятельности, бизнес, профессия или компания клиента — укажи. Если не упоминается — напиши "Не определена".
 
 ИСТОЧНИК ОБРАЩЕНИЯ: Если клиент упоминает, откуда узнал о нас (реклама, рекомендация, сайт, Instagram, 2GIS и т.д.) — укажи. Если не упоминается — напиши "Не определён".
+
+ОЦЕНКА ПРИМЕНЕНИЯ ЗНАНИЯ ПРОДУКТА (ТЭМ):
+Оцени, насколько менеджер грамотно использовал знание ТЭМ для закрытия выявленных болей клиента.
+product_score: 1 = чётко связал боль клиента с конкретным инструментом/концепцией ТЭМ и объяснил механизм решения; 0.5 = упомянул ТЭМ или преимущества в контексте боли, но без конкретных инструментов; 0 = не связал боли с ТЭМ, либо боли вовсе не выявил.
+product_feedback: конкретная оценка того, что менеджер сказал (или не сказал) о продукте применительно к болям. 2-4 предложения.
+product_recommendation: что именно нужно было сказать клиенту, используя ТЭМ. Приведи конкретный аргумент или фразу для каждой ключевой боли. 3-5 предложений.
 
 Ответь СТРОГО в формате JSON, без markdown-блоков, без пояснений, только JSON:
 
@@ -93,7 +112,10 @@ ANALYSIS_SYSTEM_PROMPT = """Ты — эксперт по контролю кач
   "client_niche": "ниша или Не определена",
   "lead_source": "источник или Не определён",
   "key_moment": "развёрнутый ключевой момент 3-5 предложений",
-  "recommendation": "развёрнутая рекомендация 3-5 предложений"
+  "recommendation": "развёрнутая рекомендация 3-5 предложений",
+  "product_score": 0,
+  "product_feedback": "оценка применения знания ТЭМ менеджером",
+  "product_recommendation": "конкретный совет как закрыть боли клиента через ТЭМ"
 }}
 
 Баллы — число: 0, 0.5 или 1. cqr_total — сумма всех баллов.
@@ -121,6 +143,7 @@ def parse_cqr_result(analysis_text: str) -> dict:
         "client_pains": "", "client_desires": "", "client_objections": "",
         "client_niche": "", "lead_source": "", "key_moment": "",
         "recommendation": "",
+        "product_score": "", "product_feedback": "", "product_recommendation": "",
         "raw_text": analysis_text,
     }
 
@@ -157,13 +180,21 @@ def parse_cqr_result(analysis_text: str) -> dict:
         except (ValueError, TypeError):
             pass
 
-    result["client_pains"]      = str(data.get("client_pains", ""))
-    result["client_desires"]    = str(data.get("client_desires", ""))
-    result["client_objections"] = str(data.get("client_objections", ""))
-    result["client_niche"]      = str(data.get("client_niche", ""))
-    result["lead_source"]       = str(data.get("lead_source", ""))
-    result["key_moment"]        = str(data.get("key_moment", ""))
-    result["recommendation"]    = str(data.get("recommendation", ""))
+    result["client_pains"]            = str(data.get("client_pains", ""))
+    result["client_desires"]          = str(data.get("client_desires", ""))
+    result["client_objections"]       = str(data.get("client_objections", ""))
+    result["client_niche"]            = str(data.get("client_niche", ""))
+    result["lead_source"]             = str(data.get("lead_source", ""))
+    result["key_moment"]              = str(data.get("key_moment", ""))
+    result["recommendation"]          = str(data.get("recommendation", ""))
+
+    if data.get("product_score") is not None:
+        try:
+            result["product_score"] = float(data["product_score"])
+        except (ValueError, TypeError):
+            pass
+    result["product_feedback"]        = str(data.get("product_feedback", ""))
+    result["product_recommendation"]  = str(data.get("product_recommendation", ""))
 
     return result
 
@@ -282,6 +313,9 @@ async def process_call(
             "client_niche": analysis_result["client_niche"],
             "lead_source": analysis_result["lead_source"],
             "recommendation": analysis_result["recommendation"],
+            "product_score": analysis_result["product_score"],
+            "product_feedback": analysis_result["product_feedback"],
+            "product_recommendation": analysis_result["product_recommendation"],
         }
 
         await append_call_to_sheet(sheet_data)
@@ -443,7 +477,7 @@ async def analyze_call(
                     {"role": "user", "content": prompt},
                 ],
                 temperature=0.3,
-                max_tokens=3000,
+                max_tokens=4000,
             )
             analysis_text = response.choices[0].message.content or "Анализ не получен"
             logger.info(f"=== RAW LLM RESPONSE ===\n{analysis_text}\n=== END RAW RESPONSE ===")
