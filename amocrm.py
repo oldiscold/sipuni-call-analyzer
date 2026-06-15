@@ -181,6 +181,9 @@ class AmoCRMClient:
         recommendation: str,
         manager_name: str = "",
         call_start: str = "",
+        product_score: str = "",
+        product_feedback: str = "",
+        product_recommendation: str = "",
     ) -> bool:
         if not self.access_token:
             logger.warning("AmoCRM: AMO_ACCESS_TOKEN не настроен, пропускаем")
@@ -204,6 +207,13 @@ class AmoCRMClient:
         lines.append(f"💢 Боли клиента:\n{client_pains}")
         lines.append("")
         lines.append(f"💡 Рекомендация:\n{recommendation}")
+        if product_feedback:
+            score_label = f" ({product_score}/1)" if product_score != "" else ""
+            lines.append("")
+            lines.append(f"📚 Применение ТЭМ{score_label}:\n{product_feedback}")
+        if product_recommendation:
+            lines.append("")
+            lines.append(f"🎓 Как закрыть через ТЭМ:\n{product_recommendation}")
 
         note_text = "\n".join(lines)
         return self.add_note_to_lead(lead_ids[0], note_text)
@@ -228,6 +238,9 @@ async def add_call_note_to_amocrm(
     recommendation: str,
     manager_name: str = "",
     call_start: str = "",
+    product_score: str = "",
+    product_feedback: str = "",
+    product_recommendation: str = "",
 ) -> None:
     client = get_amocrm_client()
     if client is None:
@@ -242,6 +255,9 @@ async def add_call_note_to_amocrm(
             recommendation,
             manager_name,
             call_start,
+            product_score,
+            product_feedback,
+            product_recommendation,
         )
     except Exception as e:
         logger.error(f"AmoCRM: необработанная ошибка: {e}")

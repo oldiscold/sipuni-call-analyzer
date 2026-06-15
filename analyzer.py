@@ -328,6 +328,9 @@ async def process_call(
             recommendation=analysis_result["recommendation"],
             manager_name=manager_name,
             call_start=call_start or "",
+            product_score=str(analysis_result.get("product_score", "")),
+            product_feedback=analysis_result.get("product_feedback", ""),
+            product_recommendation=analysis_result.get("product_recommendation", ""),
         )
 
         logger.info(f"Звонок {call_id} успешно обработан")
