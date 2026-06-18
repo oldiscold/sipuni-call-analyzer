@@ -193,7 +193,8 @@ class AmoCRMClient:
         self,
         client_phone: str,
         client_pains: str,
-        recommendation: str,
+        client_desires: str = "",
+        recommendation: str = "",
         manager_name: str = "",
         call_start: str = "",
         product_score: str = "",
@@ -216,7 +217,10 @@ class AmoCRMClient:
         if manager_name:
             lines.append(f"Менеджер: {manager_name}")
         lines.append("")
-        lines.append(f"💢 Боли клиента:\n{client_pains}")
+        pains_and_desires = client_pains or ""
+        if client_desires and client_desires not in ("Не выявлены (менеджер не выяснил)", "Не выявлены"):
+            pains_and_desires += f"\n\n🎯 Желания:\n{client_desires}"
+        lines.append(f"💢 Боли клиента и желания:\n{pains_and_desires}")
         lines.append("")
         lines.append(f"💡 Рекомендация:\n{recommendation}")
         if product_feedback:
@@ -251,7 +255,8 @@ def get_amocrm_client() -> Optional[AmoCRMClient]:
 async def add_call_note_to_amocrm(
     client_phone: str,
     client_pains: str,
-    recommendation: str,
+    client_desires: str = "",
+    recommendation: str = "",
     manager_name: str = "",
     call_start: str = "",
     product_score: str = "",
@@ -268,6 +273,7 @@ async def add_call_note_to_amocrm(
             client.add_call_analysis_note,
             client_phone,
             client_pains,
+            client_desires,
             recommendation,
             manager_name,
             call_start,

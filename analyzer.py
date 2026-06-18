@@ -325,6 +325,7 @@ async def process_call(
         await add_call_note_to_amocrm(
             client_phone=client_number,
             client_pains=analysis_result["client_pains"],
+            client_desires=analysis_result.get("client_desires", ""),
             recommendation=analysis_result["recommendation"],
             manager_name=manager_name,
             call_start=call_start or "",
