@@ -182,7 +182,7 @@ async def receive_webhook_get(
     except Exception as e:
         logger.error(f"Ошибка парсинга вебхука: {e}")
         # Всегда отвечаем success=true, иначе Сипуни приостановит отправку вебхуков
-        return {"success": True, "status": "error", "message": "Invalid webhook format"}
+        return {"success": True}
 
     # Проверяем условия для обработки
     if webhook_data.status != "ANSWER":
@@ -190,7 +190,7 @@ async def receive_webhook_get(
             f"Звонок {webhook_data.call_id} не отвечен "
             f"(status={webhook_data.status}), пропускаем"
         )
-        return {"success": True, "status": "skipped", "reason": "call not answered"}
+        return {"success": True}
 
     duration = webhook_data.duration
     if duration < 60:
@@ -198,11 +198,11 @@ async def receive_webhook_get(
             f"Звонок {webhook_data.call_id} слишком короткий "
             f"({duration} сек), пропускаем"
         )
-        return {"success": True, "status": "skipped", "reason": "call too short"}
+        return {"success": True}
 
     if not webhook_data.call_record_link:
         logger.info(f"Звонок {webhook_data.call_id} без записи, пропускаем")
-        return {"success": True, "status": "skipped", "reason": "no recording"}
+        return {"success": True}
 
     # Запускаем обработку в фоне
     background_tasks.add_task(
@@ -211,7 +211,7 @@ async def receive_webhook_get(
     )
 
     logger.info(f"Звонок {webhook_data.call_id} поставлен в очередь на обработку")
-    return {"success": True, "status": "queued", "call_id": webhook_data.call_id}
+    return {"success": True}
 
 
 @app.post("/webhook")
@@ -240,26 +240,26 @@ async def receive_webhook_post(
     except Exception as e:
         logger.error(f"Ошибка парсинга POST вебхука: {e}")
         # Всегда отвечаем success=true, иначе Сипуни приостановит отправку вебхуков
-        return {"success": True, "status": "error", "message": "Invalid webhook format"}
+        return {"success": True}
 
     # Та же логика что и для GET
     if webhook_data.status != "ANSWER":
         logger.info(f"Звонок {webhook_data.call_id} не отвечен, пропускаем")
-        return {"success": True, "status": "skipped", "reason": "call not answered"}
+        return {"success": True}
 
     duration = webhook_data.duration
     if duration < 60:
         logger.info(f"Звонок {webhook_data.call_id} слишком короткий ({duration} сек), пропускаем")
-        return {"success": True, "status": "skipped", "reason": "call too short"}
+        return {"success": True}
 
     if not webhook_data.call_record_link:
         logger.info(f"Звонок {webhook_data.call_id} без записи, пропускаем")
-        return {"success": True, "status": "skipped", "reason": "no recording"}
+        return {"success": True}
 
     background_tasks.add_task(process_call_safe, webhook_data)
 
     logger.info(f"Звонок {webhook_data.call_id} поставлен в очередь на обработку")
-    return {"success": True, "status": "queued", "call_id": webhook_data.call_id}
+    return {"success": True}
 
 
 async def process_call_safe(webhook_data: SipuniWebhook):
