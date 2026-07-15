@@ -151,6 +151,7 @@ async def health_check():
 
 
 @app.get("/webhook")
+@app.get("/webhook/")
 async def receive_webhook_get(
     request: Request,
     background_tasks: BackgroundTasks,
@@ -214,6 +215,7 @@ async def receive_webhook_get(
 
 
 @app.post("/webhook")
+@app.post("/webhook/")
 async def receive_webhook_post(
     request: Request,
     background_tasks: BackgroundTasks,
