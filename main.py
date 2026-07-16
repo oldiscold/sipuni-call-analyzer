@@ -152,9 +152,11 @@ async def health_check():
 
 @app.get("/webhook")
 @app.get("/webhook/")
+@app.get("/webhook/{rest:path}")
 async def receive_webhook_get(
     request: Request,
     background_tasks: BackgroundTasks,
+    rest: str = "",
 ):
     """
     Приём вебхука от Сипуни (GET-запрос с query-параметрами).
@@ -216,15 +218,23 @@ async def receive_webhook_get(
 
 @app.post("/webhook")
 @app.post("/webhook/")
+@app.post("/webhook/{rest:path}")
 async def receive_webhook_post(
     request: Request,
     background_tasks: BackgroundTasks,
+    rest: str = "",
 ):
     """
     Fallback для POST-запросов (на случай если Сипуни изменит формат).
     """
     try:
-        body = await request.json()
+        # Сипуни при POST шлёт application/x-www-form-urlencoded (не JSON),
+        # но на случай JSON — пробуем и его.
+        content_type = request.headers.get("content-type", "")
+        if "application/json" in content_type:
+            body = dict(await request.json())
+        else:
+            body = dict(await request.form())
         logger.info(f"RAW WEBHOOK (POST): {body}")
 
         # Конвертируем timestamp поля
