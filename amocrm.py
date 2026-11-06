@@ -192,14 +192,10 @@ class AmoCRMClient:
     def add_call_analysis_note(
         self,
         client_phone: str,
-        client_pains: str,
-        client_desires: str = "",
-        recommendation: str = "",
+        analysis_result: dict,
         manager_name: str = "",
         call_start: str = "",
-        product_score: str = "",
-        product_feedback: str = "",
-        product_recommendation: str = "",
+        duration: int = 0,
     ) -> bool:
         if not self.access_token:
             logger.warning("AmoCRM: AMO_ACCESS_TOKEN не настроен, пропускаем")
@@ -210,33 +206,57 @@ class AmoCRMClient:
             return False
 
         lead_ids = self.get_contact_leads(contact_id)
+        note_text = format_call_note(analysis_result, manager_name, call_start, duration)
 
-        lines = []
-        if call_start:
-            lines.append(f"📞 Анализ звонка: {call_start}")
-        if manager_name:
-            lines.append(f"Менеджер: {manager_name}")
-        lines.append("")
-        pains_and_desires = client_pains or ""
-        if client_desires and client_desires not in ("Не выявлены (менеджер не выяснил)", "Не выявлены"):
-            pains_and_desires += f"\n\n🎯 Желания:\n{client_desires}"
-        lines.append(f"💢 Боли клиента и желания:\n{pains_and_desires}")
-        lines.append("")
-        lines.append(f"💡 Рекомендация:\n{recommendation}")
-        if product_feedback:
-            score_label = f" ({product_score}/1)" if product_score != "" else ""
-            lines.append("")
-            lines.append(f"📚 Применение ТЭМ{score_label}:\n{product_feedback}")
-        if product_recommendation:
-            lines.append("")
-            lines.append(f"🎓 Как закрыть через ТЭМ:\n{product_recommendation}")
-
-        note_text = "\n".join(lines)
         if lead_ids:
             return self.add_note_to_lead(lead_ids[0], note_text)
         else:
             logger.info(f"AmoCRM: сделок нет у контакта {contact_id}, пишем примечание в контакт")
             return self.add_note_to_contact(contact_id, note_text)
+
+
+FRAME = "━━━━━━━━━━━━━━━"
+EMPTY_VALUES = ("", "Не выявлены", "Не выявлены (менеджер не выяснил)", "Не определена", "Не определён")
+
+
+def as_bullets(text: str) -> str:
+    """Пункты, разделённые «; », — в список с маркерами."""
+    items = [i.strip() for i in (text or "").split(";") if i.strip()]
+    return "\n".join(f"• {i}" for i in items)
+
+
+def format_call_note(analysis_result: dict, manager_name: str, call_start: str, duration: int) -> str:
+    """Текст примечания: шапка, оценка, информация о клиенте, что говорил клиент / менеджер."""
+    def score(val) -> str:
+        return str(val) if val != "" else "—"
+
+    lines = [f"📞 Анализ звонка: {call_start}" if call_start else "📞 Анализ звонка"]
+    if manager_name:
+        lines.append(f"Менеджер: {manager_name}")
+    if duration:
+        lines.append(f"Длительность: {duration // 60} мин {duration % 60} сек")
+
+    lines += ["", f"📊 Оценка: CQR {score(analysis_result.get('cqr_total', ''))}/9 · "
+                  f"ТЭМ {score(analysis_result.get('product_score', ''))}/1"]
+
+    client_info = []
+    for title, key in (("Ниша", "client_niche"), ("Источник", "lead_source")):
+        val = analysis_result.get(key, "")
+        if val not in EMPTY_VALUES:
+            client_info.append(f"{title}: {val}")
+    for title, key in (("Боли", "client_pains"), ("Желания", "client_desires"), ("Возражения", "client_objections")):
+        val = analysis_result.get(key, "")
+        if val not in EMPTY_VALUES:
+            client_info.append(f"{title}:\n{as_bullets(val)}")
+    if client_info:
+        lines += ["", "👤 О клиенте:", *client_info]
+
+    for title, key in (("🗣 Что говорил клиент", "client_said"), ("💼 Что говорил менеджер", "manager_said")):
+        val = analysis_result.get(key, "")
+        if val:
+            lines += ["", FRAME, title, FRAME, as_bullets(val)]
+
+    return "\n".join(lines)
 
 
 _client: Optional[AmoCRMClient] = None
@@ -254,14 +274,10 @@ def get_amocrm_client() -> Optional[AmoCRMClient]:
 
 async def add_call_note_to_amocrm(
     client_phone: str,
-    client_pains: str,
-    client_desires: str = "",
-    recommendation: str = "",
+    analysis_result: dict,
     manager_name: str = "",
     call_start: str = "",
-    product_score: str = "",
-    product_feedback: str = "",
-    product_recommendation: str = "",
+    duration: int = 0,
 ) -> None:
     client = get_amocrm_client()
     if client is None:
@@ -272,14 +288,10 @@ async def add_call_note_to_amocrm(
         await asyncio.to_thread(
             client.add_call_analysis_note,
             client_phone,
-            client_pains,
-            client_desires,
-            recommendation,
+            analysis_result,
             manager_name,
             call_start,
-            product_score,
-            product_feedback,
-            product_recommendation,
+            duration,
         )
     except Exception as e:
         logger.error(f"AmoCRM: необработанная ошибка: {e}")

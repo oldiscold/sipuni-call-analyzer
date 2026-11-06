@@ -37,9 +37,9 @@ def escape_markdown(text: str) -> str:
     """
     Экранирует специальные символы Markdown.
 
-    Telegram Markdown требует экранирования: _ * [ ] ( ) ~ ` > # + - = | { } . !
+    Сообщения уходят в ParseMode.MARKDOWN (legacy) — там спецсимволы только _ * ` [
     """
-    escape_chars = r"_*[]()~`>#+-=|{}.!"
+    escape_chars = r"_*`["
     return re.sub(f"([{re.escape(escape_chars)}])", r"\\\1", text)
 
 
@@ -171,19 +171,27 @@ async def send_analysis_result(
         f"📚 ТЭМ: {score(product_score)}/1"
     )
 
+    def bullets(text: str) -> str:
+        items = [i.strip() for i in text.split(";") if i.strip()]
+        return "\n".join(f"• {escape_markdown(i)}" for i in items)
+
     def block(emoji: str, title: str, text: str) -> str:
+        if not text or text.startswith(("Не выявлены", "Возражений не было")):
+            return ""
+        return f"\n\n{emoji} {title}:\n{bullets(text)}"
+
+    def framed(emoji: str, title: str, text: str) -> str:
         if not text:
             return ""
-        return f"\n\n{emoji} {title}:\n{escape_markdown(text)}"
+        return f"\n\n━━━━━━━━━━━━━━━\n{emoji} *{title}*\n━━━━━━━━━━━━━━━\n{bullets(text)}"
 
     details = (
-        block("🔥", "Боли клиента", analysis_result.get("client_pains", ""))
-        + block("🎯", "Желания клиента", analysis_result.get("client_desires", ""))
-        + block("⚡", "Возражения клиента", analysis_result.get("client_objections", ""))
-        + block("🔑", "Ключевой момент", analysis_result.get("key_moment", ""))
-        + block("💡", "Рекомендация", analysis_result.get("recommendation", ""))
-        + block("📚", "Применение ТЭМ", analysis_result.get("product_feedback", ""))
-        + block("🎓", "Как закрыть через ТЭМ", analysis_result.get("product_recommendation", ""))
+        "\n\n👤 *О клиенте*"
+        + block("🔥", "Боли", analysis_result.get("client_pains", ""))
+        + block("🎯", "Желания", analysis_result.get("client_desires", ""))
+        + block("⚡", "Возражения", analysis_result.get("client_objections", ""))
+        + framed("🗣", "Что говорил клиент", analysis_result.get("client_said", ""))
+        + framed("💼", "Что говорил менеджер", analysis_result.get("manager_said", ""))
     )
 
     message = (

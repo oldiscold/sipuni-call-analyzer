@@ -87,6 +87,10 @@ ANALYSIS_SYSTEM_PROMPT = """Ты — эксперт по контролю кач
 
 ИСТОЧНИК ОБРАЩЕНИЯ: Если клиент упоминает, откуда узнал о нас (реклама, рекомендация, сайт, Instagram, 2GIS и т.д.) — укажи. Если не упоминается — напиши "Не определён".
 
+ЧТО ГОВОРИЛ КЛИЕНТ: Перескажи по ходу разговора, что сказал клиент: кто он и чем занимается, его ситуация, вопросы, ответы на вопросы менеджера, сомнения, решение/итог. 4-7 пунктов в хронологическом порядке, каждый — одно предложение. Пиши КОНКРЕТНО: факты, цифры, сроки, названия, формулировки клиента («сколько стоит?», «я буду не в стране в эти даты»). Без общих фраз вроде «клиент интересуется тренингом» и без оценок.
+
+ЧТО ГОВОРИЛ МЕНЕДЖЕР: Перескажи по ходу разговора, что сказал менеджер: какие вопросы задал, что рассказал о продукте, какие цены/скидки/условия/даты назвал, что предложил, о чём договорились в конце. 4-7 пунктов в хронологическом порядке, каждый — одно предложение. Пиши КОНКРЕТНО: суммы, даты, названия тренингов, условия. Без общих фраз вроде «рассказал о тренинге» и без оценок.
+
 ОЦЕНКА ПРИМЕНЕНИЯ ЗНАНИЯ ПРОДУКТА (ТЭМ):
 Оцени, насколько менеджер грамотно использовал знание ТЭМ для закрытия выявленных болей клиента.
 product_score: 1 = чётко связал боль клиента с конкретным инструментом/концепцией ТЭМ и объяснил механизм решения; 0.5 = упомянул ТЭМ или преимущества в контексте боли, но без конкретных инструментов; 0 = не связал боли с ТЭМ, либо боли вовсе не выявил.
@@ -111,6 +115,8 @@ product_recommendation: что именно нужно было сказать �
   "client_objections": "текст возражений или Возражений не было",
   "client_niche": "ниша или Не определена",
   "lead_source": "источник или Не определён",
+  "client_said": "пункт 1; пункт 2; пункт 3",
+  "manager_said": "пункт 1; пункт 2; пункт 3",
   "key_moment": "развёрнутый ключевой момент 3-5 предложений",
   "recommendation": "развёрнутая рекомендация 3-5 предложений",
   "product_score": 0,
@@ -142,6 +148,7 @@ def parse_cqr_result(analysis_text: str) -> dict:
         "cqr_total": "",
         "client_pains": "", "client_desires": "", "client_objections": "",
         "client_niche": "", "lead_source": "", "key_moment": "",
+        "client_said": "", "manager_said": "",
         "recommendation": "",
         "product_score": "", "product_feedback": "", "product_recommendation": "",
         "raw_text": analysis_text,
@@ -186,6 +193,8 @@ def parse_cqr_result(analysis_text: str) -> dict:
     result["client_niche"]            = str(data.get("client_niche", ""))
     result["lead_source"]             = str(data.get("lead_source", ""))
     result["key_moment"]              = str(data.get("key_moment", ""))
+    result["client_said"]             = str(data.get("client_said", ""))
+    result["manager_said"]            = str(data.get("manager_said", ""))
     result["recommendation"]          = str(data.get("recommendation", ""))
 
     if data.get("product_score") is not None:
@@ -324,14 +333,10 @@ async def process_call(
         from amocrm import add_call_note_to_amocrm
         await add_call_note_to_amocrm(
             client_phone=client_number,
-            client_pains=analysis_result["client_pains"],
-            client_desires=analysis_result.get("client_desires", ""),
-            recommendation=analysis_result["recommendation"],
+            analysis_result=analysis_result,
             manager_name=manager_name,
             call_start=call_start or "",
-            product_score=str(analysis_result.get("product_score", "")),
-            product_feedback=analysis_result.get("product_feedback", ""),
-            product_recommendation=analysis_result.get("product_recommendation", ""),
+            duration=duration,
         )
 
         logger.info(f"Звонок {call_id} успешно обработан")
