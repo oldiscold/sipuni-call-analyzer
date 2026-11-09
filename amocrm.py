@@ -239,6 +239,10 @@ def format_call_note(analysis_result: dict, manager_name: str, call_start: str, 
     lines += ["", f"📊 Оценка: CQR {score(analysis_result.get('cqr_total', ''))}/9 · "
                   f"ТЭМ {score(analysis_result.get('product_score', ''))}/1"]
 
+    price = analysis_result.get("price_offered", "")
+    if price and not price.startswith("Не называлась"):
+        lines += ["", "💰 Цена для клиента:", as_bullets(price)]
+
     client_info = []
     for title, key in (("Ниша", "client_niche"), ("Источник", "lead_source")):
         val = analysis_result.get(key, "")

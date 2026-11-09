@@ -185,8 +185,12 @@ async def send_analysis_result(
             return ""
         return f"\n\n━━━━━━━━━━━━━━━\n{emoji} *{title}*\n━━━━━━━━━━━━━━━\n{bullets(text)}"
 
+    price = analysis_result.get("price_offered", "")
+    price_block = "" if price.startswith("Не называлась") else block("💰", "*Цена для клиента*", price)
+
     details = (
-        "\n\n👤 *О клиенте*"
+        price_block
+        + "\n\n👤 *О клиенте*"
         + block("🔥", "Боли", analysis_result.get("client_pains", ""))
         + block("🎯", "Желания", analysis_result.get("client_desires", ""))
         + block("⚡", "Возражения", analysis_result.get("client_objections", ""))
